@@ -460,7 +460,7 @@ func buildPhase2(d *Doc, txn *Transaction) func() {
 	// holding the lock so we get a consistent view.
 	var updateBytes []byte
 	if len(d.onUpdate) > 0 {
-		updateBytes = encodeV1Locked(d, txn.beforeState)
+		updateBytes = encodeTxnUpdateV1Locked(d, txn)
 	}
 
 	// Snapshot per-type observer closures while the write lock is held.
@@ -780,6 +780,10 @@ func (d *Doc) TransactE(fn func(*Transaction) error, origin ...any) error {
 // OnUpdate registers a callback that fires after every committed transaction.
 // The callback receives the incremental V1 update bytes for that transaction
 // and the origin value passed to Transact. Returns an unsubscribe function.
+//
+// As in Yjs, the update carries the structs added since the transaction began
+// and only the deletions the transaction itself made, never the document's
+// earlier deletion history; EncodeStateAsUpdateV1 carries the full delete set.
 //
 // Callbacks that compare the origin (an echo guard, a per-user filter) do so
 // with Go ==, so the caution on Transact's doc applies: pointer origin

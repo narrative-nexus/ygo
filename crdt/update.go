@@ -180,7 +180,27 @@ func DecodeStateVectorV1(data []byte) (StateVector, error) {
 
 // ── V1 encoding ───────────────────────────────────────────────────────────────
 
+// encodeV1Locked encodes the structs newer than sv plus the document's full
+// delete set, as Yjs encodeStateAsUpdate does.
 func encodeV1Locked(doc *Doc, sv StateVector) []byte {
+	return encodeV1WithDeleteSetLocked(doc, sv, buildDeleteSet(doc.store))
+}
+
+// encodeTxnUpdateV1Locked encodes the update a committed transaction emits to
+// OnUpdate: the structs added since txn.beforeState plus only the
+// transaction's own deletions, sorted and merged. Mirrors Yjs
+// writeUpdateMessageFromTransaction (writeStructsFromTransaction +
+// sortAndMergeDeleteSet + writeDeleteSet). Writing the document's whole delete
+// set instead would grow every update with the document's deletion history.
+// The transaction's delete set is cloned so its client order and ranges, which
+// observers, UndoManager and GC still read, stay untouched.
+func encodeTxnUpdateV1Locked(doc *Doc, txn *Transaction) []byte {
+	return encodeV1WithDeleteSetLocked(doc, txn.beforeState, cloneDeleteSet(txn.deleteSet))
+}
+
+// encodeV1WithDeleteSetLocked writes the structs newer than sv followed by ds.
+// ds must already be sorted and compacted per client.
+func encodeV1WithDeleteSetLocked(doc *Doc, sv StateVector, deleteSet DeleteSet) []byte {
 	type clientGroup struct {
 		client     ClientID
 		items      []*Item
@@ -201,8 +221,6 @@ func encodeV1Locked(doc *Doc, sv StateVector) []byte {
 		}
 	}
 	sort.Slice(groups, func(i, j int) bool { return groups[i].client < groups[j].client })
-
-	deleteSet := buildDeleteSet(doc.store)
 
 	return encoding.EncodeBytes(func(enc *encoding.Encoder) {
 		enc.WriteVarUint(uint64(len(groups)))
