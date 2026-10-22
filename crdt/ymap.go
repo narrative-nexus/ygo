@@ -75,9 +75,7 @@ func (m *YMap) prepareFire(txn *Transaction, keysChanged map[string]struct{}) fu
 	copy(snap, m.observers)
 	e := YMapEvent{Target: m, Txn: txn, KeysChanged: keysChanged, Keys: keys}
 	return func() {
-		for _, s := range snap {
-			s.fn(e)
-		}
+		fireAll(len(snap), func(i int) { snap[i].fn(e) })
 	}
 }
 

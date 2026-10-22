@@ -159,9 +159,7 @@ func (f *YXmlFragment) prepareFire(txn *Transaction, keysChanged map[string]stru
 	copy(snap, f.observers)
 	ev := YXmlEvent{Target: f, Txn: txn, KeysChanged: keysChanged}
 	return func() {
-		for _, s := range snap {
-			s.fn(ev)
-		}
+		fireAll(len(snap), func(i int) { snap[i].fn(ev) })
 	}
 }
 
@@ -450,9 +448,7 @@ func (e *YXmlElement) prepareFire(txn *Transaction, keysChanged map[string]struc
 	copy(snap, e.elemObs)
 	ev := YXmlEvent{Target: e, Txn: txn, KeysChanged: keysChanged}
 	return func() {
-		for _, s := range snap {
-			s.fn(ev)
-		}
+		fireAll(len(snap), func(i int) { snap[i].fn(ev) })
 	}
 }
 

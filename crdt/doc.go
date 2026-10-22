@@ -546,28 +546,66 @@ func buildPhase2(d *Doc, txn *Transaction) func() {
 	}
 
 	return func() {
-		for _, fn := range fireFns {
+		// Yjs runs every observer even when one throws (callAll) and
+		// re-throws afterwards. Match it: a panicking type observer must not
+		// stop the transaction's own update reaching OnUpdate or later
+		// observers running. The first panic is re-raised once all have run.
+		var first any
+		panicked := false
+		guard := func(fn func()) {
+			defer func() {
+				if r := recover(); r != nil && !panicked {
+					panicked, first = true, r
+				}
+			}()
 			fn()
 		}
+		for _, fn := range fireFns {
+			guard(fn)
+		}
 		if txn.afterTypeObservers != nil {
-			txn.afterTypeObservers()
+			guard(txn.afterTypeObservers)
 		}
 		for _, de := range deepSnap {
 			for _, fn := range de.fns {
-				fn(txn)
+				guard(func() { fn(txn) })
 			}
 		}
 		for _, fn := range onUpdateSnap {
-			fn(updateBytes, txn.Origin)
+			guard(func() { fn(updateBytes, txn.Origin) })
 		}
 		for _, fn := range onAfterTxnSnap {
-			fn(txn)
+			guard(func() { fn(txn) })
 		}
 		if hasSubdocs {
 			for _, fn := range onSubdocsSnap {
-				fn(subdocsEv)
+				guard(func() { fn(subdocsEv) })
 			}
 		}
+		if panicked {
+			panic(first)
+		}
+	}
+}
+
+// fireAll calls call(0..n-1) and runs every one even if some panic, then
+// re-raises the first panic, as Yjs callAll does: a throwing observer must not
+// starve its siblings.
+func fireAll(n int, call func(i int)) {
+	var first any
+	panicked := false
+	for i := 0; i < n; i++ {
+		func() {
+			defer func() {
+				if r := recover(); r != nil && !panicked {
+					panicked, first = true, r
+				}
+			}()
+			call(i)
+		}()
+	}
+	if panicked {
+		panic(first)
 	}
 }
 
@@ -747,6 +785,8 @@ func (d *Doc) transactInternal(ctx context.Context, fn func(*Transaction) error,
 //     completed (non-empty if fn mutated; minimal but well-formed if fn
 //     panicked before mutating); per-type, deep, and OnAfterTransaction
 //     observers fire for what was recorded in txn.changed.
+//   - Every observer runs even if another panics; the first observer panic
+//     is re-raised afterwards (Yjs callAll).
 //   - The original panic is re-raised to the caller after observers fire.
 //   - Rollback is NOT supported. The in-memory doc reflects fn's partial
 //     work. Callers who need atomicity must implement it above Transact.

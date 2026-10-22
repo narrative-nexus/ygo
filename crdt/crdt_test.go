@@ -964,6 +964,29 @@ func TestTransact_PanicWithNoMutationsFiresOnUpdateWithMinimalPayload(t *testing
 	require.NoError(t, ApplyUpdateV1(replica, received[0], nil))
 }
 
+func TestUnit_Transact_ObserverPanicRunsEveryObserverThenReraisesFirst(t *testing.T) {
+	// Yjs callAll: one throwing observer must not stop the transaction's own
+	// update reaching OnUpdate nor later observers running.
+	doc := New()
+	txt := doc.GetText("t")
+	var ran []string
+	txt.Observe(func(YTextEvent) { ran = append(ran, "type1"); panic("first") })
+	txt.Observe(func(YTextEvent) { ran = append(ran, "type2"); panic("second") })
+	txt.ObserveDeep(func(*Transaction) { ran = append(ran, "deep") })
+	var update []byte
+	doc.OnUpdate(func(u []byte, _ any) { ran = append(ran, "update"); update = u })
+	doc.OnAfterTransaction(func(*Transaction) { ran = append(ran, "after") })
+
+	assert.PanicsWithValue(t, "first", func() {
+		doc.Transact(func(txn *Transaction) { txt.Insert(txn, 0, "x", nil) })
+	})
+	assert.Equal(t, []string{"type1", "type2", "deep", "update", "after"}, ran)
+
+	replica := New()
+	require.NoError(t, ApplyUpdateV1(replica, update, nil))
+	assert.Equal(t, "x", replica.GetText("t").ToString())
+}
+
 func TestTransact_PanicReraises(t *testing.T) {
 	doc := New()
 

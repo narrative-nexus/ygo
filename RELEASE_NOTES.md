@@ -1,3 +1,9 @@
+## v1.54.1
+
+**Who is affected:** anyone whose observers can panic.
+
+When a type, deep, `OnUpdate`, `OnAfterTransaction` or `OnSubdocs` observer panicked, the observers after it did not run and `OnUpdate` never saw the transaction. Every observer now runs, and the first panic is re-raised after the last one. No API or wire format changes. Part of #299.
+
 ## v1.54.0
 
 **Who is affected: anyone who applies updates from peers they do not fully
