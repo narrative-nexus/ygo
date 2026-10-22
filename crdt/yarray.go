@@ -79,9 +79,7 @@ func (a *YArray) prepareFire(txn *Transaction, _ map[string]struct{}) func() {
 	copy(snap, a.observers)
 	e := YArrayEvent{Target: a, Txn: txn, Delta: delta}
 	return func() {
-		for _, s := range snap {
-			s.fn(e)
-		}
+		fireAll(len(snap), func(i int) { snap[i].fn(e) })
 	}
 }
 

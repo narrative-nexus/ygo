@@ -239,6 +239,13 @@ func encodeTxnUpdateV1Locked(doc *Doc, txn *Transaction) []byte {
 	return encodeV1WithDeleteSetLocked(doc, txn.beforeState, cloneDeleteSet(txn.deleteSet))
 }
 
+// isEmptyUpdateV1 reports whether b is the V1 update with no structs and an
+// empty delete set (two zero varuints). A nil b (no OnUpdate observers
+// registered) counts as non-empty so callers never skip on it by accident.
+func isEmptyUpdateV1(b []byte) bool {
+	return len(b) == 2 && b[0] == 0 && b[1] == 0
+}
+
 // encodeV1WithDeleteSetLocked writes the structs newer than sv followed by ds.
 // ds must already be sorted and compacted per client.
 func encodeV1WithDeleteSetLocked(doc *Doc, sv StateVector, deleteSet DeleteSet) []byte {

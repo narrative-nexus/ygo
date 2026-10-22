@@ -97,9 +97,7 @@ func (txt *YText) prepareFire(txn *Transaction, _ map[string]struct{}) func() {
 	copy(snap, txt.observers)
 	e := YTextEvent{Target: txt, Txn: txn, Delta: delta}
 	return func() {
-		for _, s := range snap {
-			s.fn(e)
-		}
+		fireAll(len(snap), func(i int) { snap[i].fn(e) })
 	}
 }
 
