@@ -5,14 +5,17 @@
 # ygo
 
 > **Narrative Nexus fork.** This is [narrative-nexus/ygo](https://github.com/narrative-nexus/ygo),
-> a fork of [reearth/ygo](https://github.com/reearth/ygo) based on `v1.51.5` and
-> tagged `v1.51.5-nn.N`. It keeps the module path `github.com/reearth/ygo`, so
-> consume it with a `replace` directive. The one change: a transaction's
-> `OnUpdate` payload carries only that transaction's own deletions (sorted and
-> merged), not the document's whole delete set, matching Yjs
-> `writeUpdateMessageFromTransaction`. `EncodeStateAsUpdate*` still writes the
-> full delete set, as Yjs `encodeStateAsUpdate` does. Upstream licensing (MIT,
-> see [LICENSE](LICENSE)) is unchanged.
+> a fork of [reearth/ygo](https://github.com/reearth/ygo) tagged
+> `v<upstream>-nn.N` (e.g. `v1.54.0-nn.2`). It keeps the module path
+> `github.com/reearth/ygo`, so consume it with a `replace` directive. It carries
+> three patches for [reearth/ygo#299](https://github.com/reearth/ygo/issues/299),
+> each on its own `fix/*` branch cut from upstream `main`:
+> a transaction's `OnUpdate` payload carries only its own deletions
+> (`fix/onupdate-txn-delete-set`), every observer runs when one panics with the
+> first panic re-raised (`fix/observer-panic-runs-all`), and a transaction that
+> changed nothing emits no update (`fix/empty-transaction-no-update`). Drop the
+> fork once upstream has all three. Upstream licensing (MIT, see
+> [LICENSE](LICENSE)) is unchanged.
 
 [![CI](https://github.com/reearth/ygo/actions/workflows/ci.yml/badge.svg)](https://github.com/reearth/ygo/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/reearth/ygo.svg)](https://pkg.go.dev/github.com/reearth/ygo)
