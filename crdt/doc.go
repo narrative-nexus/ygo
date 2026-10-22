@@ -545,6 +545,9 @@ func buildPhase2(d *Doc, txn *Transaction) func() {
 		return nil
 	}
 
+	// Decided under the lock; the closure runs after it is released.
+	noChange := txnAddedNothing(txn)
+
 	return func() {
 		// Yjs runs every observer even when one throws (callAll) and
 		// re-throws afterwards. Match it: a panicking type observer must not
@@ -571,8 +574,11 @@ func buildPhase2(d *Doc, txn *Transaction) func() {
 				guard(func() { fn(txn) })
 			}
 		}
-		for _, fn := range onUpdateSnap {
-			guard(func() { fn(updateBytes, txn.Origin) })
+		// Yjs emits no update for a transaction that changed nothing.
+		if !noChange {
+			for _, fn := range onUpdateSnap {
+				guard(func() { fn(updateBytes, txn.Origin) })
+			}
 		}
 		for _, fn := range onAfterTxnSnap {
 			guard(func() { fn(txn) })
@@ -586,6 +592,22 @@ func buildPhase2(d *Doc, txn *Transaction) func() {
 			panic(first)
 		}
 	}
+}
+
+// txnAddedNothing reports whether txn added no structs and deleted nothing, so
+// there is no update to emit. Callers must hold d.mu.
+func txnAddedNothing(txn *Transaction) bool {
+	for _, ranges := range txn.deleteSet.clients {
+		if len(ranges) > 0 {
+			return false
+		}
+	}
+	for client, clock := range txn.afterState {
+		if clock != txn.beforeState.Clock(client) {
+			return false
+		}
+	}
+	return true
 }
 
 // fireAll calls call(0..n-1) and runs every one even if some panic, then
@@ -782,9 +804,9 @@ func (d *Doc) transactInternal(ctx context.Context, fn func(*Transaction) error,
 //   - If fn panics (or any Phase 1 work panics), d.mu is released via defer.
 //   - Observers fire with whatever partial state was committed before the
 //     panic: OnUpdate receives a V1 update describing the mutations that
-//     completed (non-empty if fn mutated; minimal but well-formed if fn
-//     panicked before mutating); per-type, deep, and OnAfterTransaction
-//     observers fire for what was recorded in txn.changed.
+//     completed (and does not fire at all if fn changed nothing, as in
+//     Yjs); per-type, deep, and OnAfterTransaction observers fire for what
+//     was recorded in txn.changed.
 //   - Every observer runs even if another panics; the first observer panic
 //     is re-raised afterwards (Yjs callAll).
 //   - The original panic is re-raised to the caller after observers fire.

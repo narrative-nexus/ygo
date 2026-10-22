@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`crdt`: a panicking observer no longer starves the rest of the observer phase.** A type observer that panicked stopped the phase at once, so the transaction's own update never reached `OnUpdate` and later observers never ran. Yjs runs every observer (`callAll`) and re-throws afterwards; ygo now runs them all and re-raises the first panic once they have. Part of #299.
 
+## [1.54.2] — 2026-10-22
+
+### Fixed
+
+- **`crdt`: a transaction that changed nothing no longer emits an update.** ygo called `OnUpdate` with an empty update for every no-op transaction, including one whose function panicked before changing anything. Yjs emits no update when the transaction added no structs and deleted nothing; ygo now matches. Part of #299.
+
 ## [1.54.0] — 2026-10-22
 
 ### Added

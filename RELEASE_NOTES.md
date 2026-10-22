@@ -1,3 +1,9 @@
+## v1.54.2
+
+**Who is affected:** anyone counting `OnUpdate` calls or persisting every payload.
+
+`OnUpdate` no longer fires for a transaction that added no structs and made no deletions. Transactions that change anything fire as before. No API or wire format changes. Part of #299.
+
 ## v1.54.1
 
 **Who is affected:** anyone whose observers can panic.

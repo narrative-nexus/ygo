@@ -411,7 +411,8 @@ func TestUnit_Doc_Transact_OriginForwarded(t *testing.T) {
 	var gotOrigin any
 	doc.OnUpdate(func(_ []byte, origin any) { gotOrigin = origin })
 
-	doc.Transact(func(_ *Transaction) {}, "my-origin")
+	txt := doc.GetText("t")
+	doc.Transact(func(txn *Transaction) { txt.Insert(txn, 0, "x", nil) }, "my-origin")
 
 	assert.Equal(t, "my-origin", gotOrigin)
 }
@@ -421,9 +422,10 @@ func TestUnit_Doc_Transact_Unsubscribe(t *testing.T) {
 	calls := 0
 	unsub := doc.OnUpdate(func(_ []byte, _ any) { calls++ })
 
-	doc.Transact(func(_ *Transaction) {})
+	txt := doc.GetText("t")
+	doc.Transact(func(txn *Transaction) { txt.Insert(txn, 0, "a", nil) })
 	unsub()
-	doc.Transact(func(_ *Transaction) {})
+	doc.Transact(func(txn *Transaction) { txt.Insert(txn, 0, "b", nil) })
 
 	assert.Equal(t, 1, calls, "observer must not fire after unsubscribe")
 }
@@ -619,6 +621,10 @@ func TestUnit_YArray_ObserveDeep_FiresOnChange(t *testing.T) {
 	assert.Equal(t, 1, calls)
 
 	doc.Transact(func(txn *Transaction) { arr.Push(txn, []any{3}) })
+	assert.Equal(t, 2, calls)
+
+	// A no-op transaction on a doc that already has deletions is still empty.
+	doc.Transact(func(*Transaction) {})
 	assert.Equal(t, 2, calls)
 }
 
@@ -936,12 +942,9 @@ func TestTransact_PanicFiresOnAfterTransaction(t *testing.T) {
 	assert.NotEmpty(t, txnSeen.changed, "txn.changed must reflect the partial mutation")
 }
 
-func TestTransact_PanicWithNoMutationsFiresOnUpdateWithMinimalPayload(t *testing.T) {
-	// When fn panics before any mutation, OnUpdate still fires (consistent
-	// with the normal-path behavior of a no-op Transact). The payload is a
-	// well-formed but minimal V1 update — not nil — so subscribers should
-	// not treat "nil update" as a sentinel for "no changes". We verify
-	// round-trip application succeeds against a fresh doc without error.
+func TestUnit_Transact_PanicWithNoMutationsEmitsNoUpdate(t *testing.T) {
+	// Yjs emits no update for a transaction that changed nothing, and a
+	// panic before any mutation changed nothing.
 	doc := New()
 
 	var received [][]byte
@@ -956,12 +959,24 @@ func TestTransact_PanicWithNoMutationsFiresOnUpdateWithMinimalPayload(t *testing
 		})
 	}()
 
-	require.Len(t, received, 1, "OnUpdate fires once per transaction, even on immediate-panic no-op")
-	require.NotNil(t, received[0])
+	assert.Empty(t, received, "an immediate-panic no-op emits no update")
+}
 
-	// The payload applies cleanly to a fresh replica.
-	replica := New()
-	require.NoError(t, ApplyUpdateV1(replica, received[0], nil))
+func TestUnit_Transact_EmptyTransactionEmitsNoUpdate(t *testing.T) {
+	doc := New()
+	calls := 0
+	doc.OnUpdate(func([]byte, any) { calls++ })
+
+	doc.Transact(func(*Transaction) {})
+	assert.Zero(t, calls)
+
+	txt := doc.GetText("t")
+	doc.Transact(func(txn *Transaction) { txt.Insert(txn, 0, "x", nil) })
+	assert.Equal(t, 1, calls, "a real change still emits")
+
+	// A delete-only transaction carries its delete set and still emits.
+	doc.Transact(func(txn *Transaction) { txt.Delete(txn, 0, 1) })
+	assert.Equal(t, 2, calls)
 }
 
 func TestUnit_Transact_ObserverPanicRunsEveryObserverThenReraisesFirst(t *testing.T) {
