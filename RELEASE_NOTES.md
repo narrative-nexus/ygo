@@ -1,3 +1,9 @@
+## v1.54.1
+
+**Who is affected:** anyone relaying or persisting `OnUpdate` payloads.
+
+Each `OnUpdate` payload used to carry the document's entire delete set. It now carries only the deletions the transaction made, matching Yjs, so update size no longer grows with the document's deletion history. `EncodeStateAsUpdateV1` is unchanged. No API or wire format changes. Part of #299.
+
 ## v1.54.0
 
 **Who is affected: anyone who applies updates from peers they do not fully

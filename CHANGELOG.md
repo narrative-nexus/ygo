@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.54.1] — 2026-10-22
+
+### Fixed
+
+- **`crdt`: `OnUpdate` carries only the transaction's own deletions.** Every update delivered to `OnUpdate` wrote the whole document's delete set, so relays and persistence paid for the full deletion history on each transaction. Yjs writes only the transaction's own sorted, merged delete set (`writeUpdateMessageFromTransaction`); ygo now does too. `EncodeStateAsUpdateV1` still writes the full delete set, as Yjs `encodeStateAsUpdate` does. Part of #299.
+
 ## [1.54.0] — 2026-10-22
 
 ### Added
